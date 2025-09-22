@@ -275,7 +275,7 @@ class DataExtractionOnlyHTML:
         Data_GEN = Data[Data["Type"].isin(Types_selected)]
         # Device column is expanded into 4 new columns
         Names = Data_GEN["Device"].str.split("/", expand=True)
-        Names.columns = ["Name1", "NameLF"]
+        Names.columns = ["Name1", "NameLF","NameX"]
 
         Values = Data_GEN.iloc[:, -3:]
         Values.columns = ["V [kV]", "P [MW]", "Q [MVAr]"]
