@@ -331,9 +331,9 @@ class DataExtractionOnlyHTML:
                 Data_GEN.at[c, "tipo"] = "SG"
             """
             if (
-                "HP" in name
-                or "TER"
-                or "HE" in name
+                "HP_" in name
+                or "TER_" in name
+                or "HE_" in name
                 or "LomaALta" in name
                 or "La_Mina_RColorado" in name
             ):
