@@ -274,12 +274,7 @@ class DataExtractionOnlyHTML:
         Data_GEN = Data[Data["Type"].isin(Types_selected)]
         # Device column is expanded into 4 new columns
         Names = Data_GEN["Device"].str.split("/", expand=True)
-
-        if Names.shape[1] == 4:
-            Names.columns = ["Name1", "Name2", "NameLF", "Name4"]
-        else:
-            Names.columns = ["Name1", "Name2", "NameLF"]
-            # raise ValueError(f"Error: Se esperaban 4 columnas, pero se encontraron {Names.shape[1]}. Revisa la estructura del HTML.")
+        Names.columns = ["Name1", "Name2", "NameLF", "Name4"]
 
         Values = Data_GEN.iloc[:, -3:]
         Values.columns = ["V [kV]", "P [MW]", "Q [MVAr]"]
@@ -289,6 +284,27 @@ class DataExtractionOnlyHTML:
         Data_GEN["V [kV]"] = Data_GEN["V [kV]"].apply(helper.Get_Voltage_Magnitude)
         Data_GEN["P [MW]"] = Data_GEN["P [MW]"].apply(helper.Transformation_MW_MVAR)
         Data_GEN["Q [MVAr]"] = Data_GEN["Q [MVAr]"].apply(helper.Transformation_MW_MVAR)
+        Data_GEN["Vnom [kV]"] = Data_GEN["V [kV]"].apply(helper.Get_Nominal_Voltage)
+
+        # Nominal Voltage Correction
+        N = len(Data_GEN)
+        for fila in range(N):
+            Name1 = Data_GEN.at[fila, "Name1"]
+            Name2 = Data_GEN.at[fila, "Name2"]
+            NameLF = Data_GEN.at[fila, "NameLF"]
+            result = self.Vnom[
+                (self.Vnom["Name1"] == Name1)
+                & (self.Vnom["Name2"] == Name2)
+                & (self.Vnom["NameLF"] == NameLF)
+            ]
+            if len(result) == 1:
+                Data_GEN.at[fila, "Vnom [kV]"] = float(
+                    result["Tensión Nominal [kV]"].iloc[0]
+                )
+
+            else:
+                continue
+        Data_GEN["V [pu]"] = Data_GEN["V [kV]"] / Data_GEN["Vnom [kV]"]
 
         # Modifications ----------------------------------------
         Data_GEN_copy = Data_GEN
@@ -305,28 +321,30 @@ class DataExtractionOnlyHTML:
                 Data_GEN.at[c, "tipo"] = "PFV"
             if "PE" in name and "PFV" not in name and "Central" not in name:
                 Data_GEN.at[c, "tipo"] = "PE"
+            """
             if (
-                (
-                    "Central" in name
-                    or "Los_Quilos_Juncal" in name
-                    or "Cochrane" in name
-                    or "C_ANGOSTURA" in name
-                    or "HP_" in name
-                    or "Alfalfal" in name
-                    or "C_Palmucho" in name
-                )
-                and "BESS" not in name
-                and "PFV" not in name
+                "Central" in name
+                or "Los_Quilos_Juncal" in name
+                or "Cochrane" in name
+                or "C_ANGOSTURA" in name
+                or "HP_" in name
+            ) and "BESS" not in name:
+                Data_GEN.at[c, "tipo"] = "SG"
+            """
+            if (
+                "HP" in name
+                or "TER"
+                or "HE" in name
+                or "LomaALta" in name
+                or "La_Mina_RColorado" in name
             ):
                 Data_GEN.at[c, "tipo"] = "SG"
-            if "CS_" in name:
+            if "CCSS" in name:
                 Data_GEN.at[c, "tipo"] = "CS"
             if "STAT" in name:
                 Data_GEN.at[c, "tipo"] = "STATCOM"
             if "BAT" in name:
                 Data_GEN.at[c, "tipo"] = "BATSINC"
-            if "LF1" in name or "LF2" in name or "HVDC" in name:
-                Data_GEN.at[c, "tipo"] = "HVDC"
 
             c = c + 1
 

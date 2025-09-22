@@ -1,90 +1,164 @@
-#from tracemalloc import _TraceTupleT
+# from tracemalloc import _TraceTupleT
 import pandas as pd
 import numpy as np
 import math as m
 
+
 class Report:
-    def __init__(self,DataGen,DataLoad):
+    def __init__(self, DataGen, DataLoad):
         self.DataGen = DataGen
         self.DataLoad = DataLoad
 
     def ResultsReport(self):
-        Report = pd.DataFrame(columns=['Item', 'Value',"Unit"])
-        P_IBR_PV = round(self.DataGen[self.DataGen["tipo"] == "PFV"]["P [MW]"].sum(),1)
-        P_IBR_WF = round(self.DataGen[self.DataGen["tipo"] == "PE"]["P [MW]"].sum(),1)
+        Report = pd.DataFrame(columns=["Item", "Value", "Unit"])
+        P_IBR_PV = round(self.DataGen[self.DataGen["tipo"] == "PFV"]["P [MW]"].sum(), 1)
+        P_IBR_WF = round(self.DataGen[self.DataGen["tipo"] == "PE"]["P [MW]"].sum(), 1)
         P_IBR_BESS_GEN = 0
-        P_PMGD = round(self.DataGen[self.DataGen["tipo"] == "PMGD"]["P [MW]"].sum(),1)
-        Total_IBR_GEN = P_IBR_PV+P_IBR_WF+P_IBR_BESS_GEN+P_PMGD
+        P_PMGD = round(self.DataGen[self.DataGen["tipo"] == "PMGD"]["P [MW]"].sum(), 1)
+        Total_IBR_GEN = P_IBR_PV + P_IBR_WF + P_IBR_BESS_GEN + P_PMGD
 
-        P_Gen_SG = round(self.DataGen[self.DataGen["tipo"] == "SG"]["P [MW]"].sum(),1)
+        P_Gen_SG = round(self.DataGen[self.DataGen["tipo"] == "SG"]["P [MW]"].sum(), 1)
         Total_GEN = Total_IBR_GEN + P_Gen_SG
 
-        P_Load = round(self.DataLoad["P [MW]"].sum(),1) # Source reference, i.e., positive when generating
-        P_BESS = abs(round(self.DataGen[self.DataGen["tipo"] == "BESS"]["P [MW]"].sum(),1))
-        P_BATSINC = abs(round(self.DataGen[self.DataGen["tipo"] == "BATSINC"]["P [MW]"].sum(),1))
+        P_Load = round(
+            self.DataLoad["P [MW]"].sum(), 1
+        )  # Source reference, i.e., positive when generating
+        P_BESS = abs(
+            round(self.DataGen[self.DataGen["tipo"] == "BESS"]["P [MW]"].sum(), 1)
+        )
+        P_BATSINC = abs(
+            round(self.DataGen[self.DataGen["tipo"] == "BATSINC"]["P [MW]"].sum(), 1)
+        )
 
-        Total_consumption = P_Load + P_BESS+ P_BATSINC
-        
-        P_HVDC = round(self.DataGen[self.DataGen["tipo"] == "HVDC"]["P [MW]"].sum(),1)
-        P_CS   = round(self.DataGen[self.DataGen["tipo"] == "CS"]["P [MW]"].sum(),1)
-        Loss = Total_GEN - Total_consumption+ P_HVDC+ P_CS
+        Total_consumption = P_Load + P_BESS + P_BATSINC
 
-        #---------------------------------------------------------------------------------
-        #-- Porcentajes
-        p_IBR_PV = round(100*P_IBR_PV/Total_GEN,1)
-        p_IBR_WF = round(100*P_IBR_WF/Total_GEN,1)
-        p_IBR_BESS_GEN = round(100*P_IBR_BESS_GEN/Total_GEN,1)
-        p_PMGD = round( 100*P_PMGD/Total_GEN,1)
+        P_HVDC = round(self.DataGen[self.DataGen["tipo"] == "HVDC"]["P [MW]"].sum(), 1)
+        P_CS = round(self.DataGen[self.DataGen["tipo"] == "CCSS"]["P [MW]"].sum(), 1)
+        Loss = Total_GEN - Total_consumption + P_HVDC + P_CS
 
-        p_IBR_GEN = round( 100*Total_IBR_GEN/Total_GEN ,1)
-        p_Gen_SG = round( 100*P_Gen_SG/Total_GEN ,1 )
-        
+        # ---------------------------------------------------------------------------------
+        # -- Porcentajes
+        p_IBR_PV = round(100 * P_IBR_PV / Total_GEN, 1)
+        p_IBR_WF = round(100 * P_IBR_WF / Total_GEN, 1)
+        p_IBR_BESS_GEN = round(100 * P_IBR_BESS_GEN / Total_GEN, 1)
+        p_PMGD = round(100 * P_PMGD / Total_GEN, 1)
 
+        p_IBR_GEN = round(100 * Total_IBR_GEN / Total_GEN, 1)
+        p_Gen_SG = round(100 * P_Gen_SG / Total_GEN, 1)
 
-        #----------------------------------------------------------------------------
-        # Numero de generadores 
-        N_PV = int(self.DataGen["tipo"].str.count("PFV").sum() )
-        N_WP=   self.DataGen["tipo"].str.count("PE").sum() 
-        N_SG =  self.DataGen["tipo"].str.count("SG").sum() 
-        N_PMGD =  self.DataGen["tipo"].str.count("PMGD").sum() 
-        N_BESS =  self.DataGen["tipo"].str.count("BESS").sum() 
-        N_BATSINC= self.DataGen["tipo"].str.count("BATSINC").sum()
-        N_CS =  self.DataGen["tipo"].str.count("CS").sum()
-        #-----------------------------------------------------------------------------
-        #-- Agrego a dataframe
-
+        # ----------------------------------------------------------------------------
+        # Numero de generadores
+        N_PV = int(self.DataGen["tipo"].str.count("PFV").sum())
+        N_WP = self.DataGen["tipo"].str.count("PE").sum()
+        N_SG = self.DataGen["tipo"].str.count("SG").sum()
+        N_PMGD = self.DataGen["tipo"].str.count("PMGD").sum()
+        N_BESS = self.DataGen["tipo"].str.count("BESS").sum()
+        N_BATSINC = self.DataGen["tipo"].str.count("BATSINC").sum()
+        N_CS = self.DataGen["tipo"].str.count("CS").sum()
+        # -----------------------------------------------------------------------------
+        # -- Agrego a dataframe
 
         Report = {
-                "Item": ['Total IBR PV Generation', 'Total IBR WF Generation', 'Total IBR Batteries Generation',
-                        'Total Distributed Generation (PMGD)','Total IBR Generation', 'Total Synchronous Generation',
-                         'Total Generation','Total Load (Passive)', 'Total IBR Batteries Consumption', "Total Synchronous Batteries"," Total CS Consumption",
-                          'Total Consumption (Load+Batteries)','Total Losses',
-                              None, None,
-                              'IBR PV Generation Participation','IBR WF Generation Participation',
-                              'IBR Batteries Generation Part.','Distributed Generation (PMGD) Part.',
-                              'IBR Generation Participation','Synchronous Generation Participation',
-                              None, None,
-                              'Number of photovoltaic generators', 'Number of wind generators', 'Number of synchronous generators',
-                                'Number of PMGDs', 'Numner of BESS',"Number of synchronous batteries", "Number of synchronous Condenser"
-                              ],
+            "Item": [
+                "Total IBR PV Generation",
+                "Total IBR WF Generation",
+                "Total IBR Batteries Generation",
+                "Total Distributed Generation (PMGD)",
+                "Total IBR Generation",
+                "Total Synchronous Generation",
+                "Total Generation",
+                "Total Load (Passive)",
+                "Total IBR Batteries Consumption",
+                "Total Synchronous Batteries",
+                " Total CS Consumption",
+                "Total Consumption (Load+Batteries)",
+                "Total Losses",
+                None,
+                None,
+                "IBR PV Generation Participation",
+                "IBR WF Generation Participation",
+                "IBR Batteries Generation Part.",
+                "Distributed Generation (PMGD) Part.",
+                "IBR Generation Participation",
+                "Synchronous Generation Participation",
+                None,
+                None,
+                "Number of photovoltaic generators",
+                "Number of wind generators",
+                "Number of synchronous generators",
+                "Number of PMGDs",
+                "Numner of BESS",
+                "Number of synchronous batteries",
+                "Number of synchronous Condenser",
+            ],
+            "Value": [
+                P_IBR_PV,
+                P_IBR_WF,
+                P_IBR_BESS_GEN,
+                P_PMGD,
+                Total_IBR_GEN,
+                P_Gen_SG,
+                Total_GEN,
+                P_Load,
+                P_BESS,
+                P_BATSINC,
+                P_CS,
+                Total_consumption,
+                Loss,
+                None,
+                None,
+                p_IBR_PV,
+                p_IBR_WF,
+                p_IBR_BESS_GEN,
+                p_PMGD,
+                p_IBR_GEN,
+                p_Gen_SG,
+                None,
+                None,
+                N_PV,
+                N_WP,
+                N_SG,
+                N_PMGD,
+                N_BESS,
+                N_BATSINC,
+                N_CS,
+            ],
+            "Unit": [
+                "MW",
+                "MW",
+                "MW",
+                "MW",
+                "MW",
+                "MW",
+                "MW",
+                "MW",
+                "MW",
+                "MW",
+                "MW",
+                "MW",
+                "MW",
+                None,
+                None,
+                "%",
+                "%",
+                "%",
+                "%",
+                "%",
+                "%",
+                None,
+                None,
+                "-",
+                "-",
+                "-",
+                "-",
+                "-",
+                "-",
+                "-",
+            ],
+        }
+        Report = pd.DataFrame(Report)
 
-                "Value": [P_IBR_PV, P_IBR_WF, P_IBR_BESS_GEN, P_PMGD, Total_IBR_GEN, 
-                         P_Gen_SG,  Total_GEN,P_Load, P_BESS, P_BATSINC,P_CS, Total_consumption, Loss,
-                          None, None,
-                         p_IBR_PV,p_IBR_WF,p_IBR_BESS_GEN,p_PMGD,p_IBR_GEN,p_Gen_SG,
-                          None, None,
-                          N_PV, N_WP, N_SG, N_PMGD, N_BESS, N_BATSINC, N_CS ],
-
-                "Unit": ['MW','MW','MW','MW','MW','MW','MW','MW','MW','MW','MW','MW','MW',
-                         None,None,
-                         '%','%','%','%','%','%',
-                         None, None,
-                         '-', '-', '-', '-', '-', '-', '-']
-                }
-        Report = pd.DataFrame(Report)        
- 
         return Report
-
 
         """
         P_Gen =  round(self.DataGen["P [MW]"].sum(),1)
@@ -143,6 +217,3 @@ class Report:
         
         ReportFinal=pd.concat([Report,Report2], axis=1) 
         """
-
-
-      
