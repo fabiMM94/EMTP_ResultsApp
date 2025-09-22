@@ -339,11 +339,13 @@ class DataExtractionOnlyHTML:
             ):
                 Data_GEN.at[c, "tipo"] = "SG"
             if "CCSS" in name:
-                Data_GEN.at[c, "tipo"] = "CS"
+                Data_GEN.at[c, "tipo"] = "CCSS"
             if "STAT" in name:
                 Data_GEN.at[c, "tipo"] = "STATCOM"
             if "BAT" in name:
                 Data_GEN.at[c, "tipo"] = "BATSINC"
+            if "HVDC" in name:
+                Data_GEN.at[c, "tipo"] = "HVDC"
 
             c = c + 1
 

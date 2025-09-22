@@ -34,6 +34,7 @@ class Report:
 
         P_HVDC = round(self.DataGen[self.DataGen["tipo"] == "HVDC"]["P [MW]"].sum(), 1)
         P_CS = round(self.DataGen[self.DataGen["tipo"] == "CCSS"]["P [MW]"].sum(), 1)
+        Q_CS = round(self.DataGen[self.DataGen["tipo"] == "CCSS"]["Q [MVAr]"].sum(), 1)
         Loss = Total_GEN - Total_consumption + P_HVDC + P_CS
 
         # ---------------------------------------------------------------------------------
@@ -54,7 +55,7 @@ class Report:
         N_PMGD = self.DataGen["tipo"].str.count("PMGD").sum()
         N_BESS = self.DataGen["tipo"].str.count("BESS").sum()
         N_BATSINC = self.DataGen["tipo"].str.count("BATSINC").sum()
-        N_CS = self.DataGen["tipo"].str.count("CS").sum()
+        N_CS = self.DataGen["tipo"].str.count("CCSS").sum()
         # -----------------------------------------------------------------------------
         # -- Agrego a dataframe
 
@@ -70,9 +71,11 @@ class Report:
                 "Total Load (Passive)",
                 "Total IBR Batteries Consumption",
                 "Total Synchronous Batteries",
-                " Total CS Consumption",
+                "Total CCSS Consumption",
                 "Total Consumption (Load+Batteries)",
+                "Total HVDC",
                 "Total Losses",
+                "Total Reactives CCSS",
                 None,
                 None,
                 "IBR PV Generation Participation",
@@ -104,7 +107,9 @@ class Report:
                 P_BATSINC,
                 P_CS,
                 Total_consumption,
+                P_HVDC,
                 Loss,
+                Q_CS,
                 None,
                 None,
                 p_IBR_PV,
@@ -137,6 +142,8 @@ class Report:
                 "MW",
                 "MW",
                 "MW",
+                "MW",
+                "MVar",
                 None,
                 None,
                 "%",
