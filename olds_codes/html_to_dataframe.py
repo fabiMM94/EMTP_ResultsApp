@@ -71,7 +71,7 @@ class DataExtraction:
             Name2 = Data_GEN.at[fila, "Name2"]
             NameLF = Data_GEN.at[fila, "NameLF"]
             result = self.Vnom[
-                (self.Vnom["Name1"] == Name1)
+                (self.Vnom["Name1"] == Name1)|
                 & (self.Vnom["Name2"] == Name2)
                 & (self.Vnom["NameLF"] == NameLF)
             ]
@@ -231,6 +231,7 @@ class BusExtraction:
 class DataExtractionOnlyHTML:
     def __init__(self, html_file):
         self.html_file = html_file
+        
 
     def Data_Extraction(self, html_file):
         if isinstance(self.html_file, io.BytesIO) or isinstance(
@@ -274,7 +275,7 @@ class DataExtractionOnlyHTML:
         Data_GEN = Data[Data["Type"].isin(Types_selected)]
         # Device column is expanded into 4 new columns
         Names = Data_GEN["Device"].str.split("/", expand=True)
-        Names.columns = ["Name1", "Name2", "NameLF", "Name4"]
+        Names.columns = ["Name1", "NameLF"]
 
         Values = Data_GEN.iloc[:, -3:]
         Values.columns = ["V [kV]", "P [MW]", "Q [MVAr]"]
@@ -285,16 +286,18 @@ class DataExtractionOnlyHTML:
         Data_GEN["P [MW]"] = Data_GEN["P [MW]"].apply(helper.Transformation_MW_MVAR)
         Data_GEN["Q [MVAr]"] = Data_GEN["Q [MVAr]"].apply(helper.Transformation_MW_MVAR)
         Data_GEN["Vnom [kV]"] = Data_GEN["V [kV]"].apply(helper.Get_Nominal_Voltage)
+        
 
         # Nominal Voltage Correction
+        """
         N = len(Data_GEN)
         for fila in range(N):
             Name1 = Data_GEN.at[fila, "Name1"]
-            Name2 = Data_GEN.at[fila, "Name2"]
+            # Name2 = Data_GEN.at[fila, "Name2"]
             NameLF = Data_GEN.at[fila, "NameLF"]
             result = self.Vnom[
                 (self.Vnom["Name1"] == Name1)
-                & (self.Vnom["Name2"] == Name2)
+                # & (self.Vnom["Name2"] == Name2)
                 & (self.Vnom["NameLF"] == NameLF)
             ]
             if len(result) == 1:
@@ -305,7 +308,7 @@ class DataExtractionOnlyHTML:
             else:
                 continue
         Data_GEN["V [pu]"] = Data_GEN["V [kV]"] / Data_GEN["Vnom [kV]"]
-
+        """
         # Modifications ----------------------------------------
         Data_GEN_copy = Data_GEN
         c = 0
