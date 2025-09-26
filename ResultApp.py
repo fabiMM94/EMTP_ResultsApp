@@ -1,46 +1,12 @@
 import pandas as pd
+
+# from user_tools import UserHandler
 from bs4 import BeautifulSoup
 import io
-import unicodedata
-from pathlib import Path
-from tkinter import Tk, filedialog
 import re
 
-
-class DataExtraction:
-    def __init__(self, html_file):
-        self.html_file = html_file
-
-    def get_data_from_html(self):
-        if isinstance(self.html_file, io.BytesIO) or isinstance(
-            self.html_file, io.StringIO
-        ):
-            self.html_file.seek(0)  # Reiniciar puntero
-            html_content = self.html_file.read().decode("iso-8859-1")
-            Data = pd.read_html(html_content)
-        else:
-            Data = pd.read_html(self.html_file)  # Si
-        # Data= pd.read_html(html_file)
-        # I take the first part of the html
-        Data = pd.DataFrame(Data[0])
-        # Columns are de.fined
-        Columns = Data.iloc[0]
-        Data.columns = Columns.to_list()
-        # The zero row that had the name of the columns is deleted
-        Data = Data.iloc[1:]
-        # The indexes are reset
-        Data = pd.DataFrame(Data.reset_index())
-
-        # New Columns: Device, Type, V ,P Q
-        new_columns = Columns.to_list()
-        new_columns = new_columns[:5]
-        Data = Data[new_columns[:5]]
-
-        Generation_Table = self.GenerationData(Data)
-        Load_Table = self.LoadData(Data)
-
-        print(Data)
-        return
+from pathlib import Path
+from tkinter import Tk, filedialog
 
 
 class FileManager:
@@ -61,46 +27,152 @@ class FileManager:
         return self.file_selected
 
 
+class DataExtractor:
+    def __init__(self):
+        pass
+
+    def get_data_from_html(self, html_file: Path) -> pd.DataFrame:
+        if isinstance(html_file, io.BytesIO) or isinstance(html_file, io.StringIO):
+            html_file.seek(0)  # Reiniciar puntero
+            html_content = html_file.read().decode("iso-8859-1")
+            Data = pd.read_html(html_content)
+        else:
+            Data = pd.read_html(html_file)  # Si
+        # Data= pd.read_html(html_file)
+        # I take the first part of the html
+        Data = pd.DataFrame(Data[0])
+        # Columns are de.fined
+        Columns = Data.iloc[0]
+        Data.columns = Columns.to_list()
+        # The zero row that had the name of the columns is deleted
+        Data = Data.iloc[1:]
+        # The indexes are reset
+        Data = pd.DataFrame(Data.reset_index())
+
+        # New Columns: Device, Type, V ,P Q
+        new_columns = Columns.to_list()
+        new_columns = new_columns[:5]
+        Data_html = Data[new_columns[:5]]
+
+        print(Data_html)
+        return Data_html
+
+    def get_generation_data(self, html_file: Path) -> pd.DataFrame:
+        data_html = self.get_data_from_html(html_file)
+        data_gen = self.clean_and_filter_gen_data(data_html)
+        return data_gen
+
+    def get_load_data(self, html_file: Path) -> pd.DataFrame:
+        data_html = self.get_data_from_html(html_file)
+        data_load = self.clean_and_filter_load_data(data_html)
+        return data_load
+
+    def clean_and_filter_gen_data(self, Data: pd.DataFrame) -> pd.DataFrame:
+        helper = Helper()
+        Types_selected = ["PVbus", "Slack", "PQbus"]
+        Data_GEN = Data[Data["Type"].isin(Types_selected)]
+        Names = Data_GEN["Device"].str.split("/", expand=True)
+        Names.columns = ["Name1", "NameLF", "ExtraName"]
+
+        Values = Data_GEN.iloc[:, -3:]
+        Values.columns = ["V [kV]", "P [MW]", "Q [MVAr]"]
+        Data_GEN = pd.concat([Names, Values], axis=1)
+
+        Data_GEN["V [kV]"] = Data_GEN["V [kV]"].apply(
+            lambda x: helper.get_voltage_magnitude(x, phases=3)
+        )
+        Data_GEN["P [MW]"] = Data_GEN["P [MW]"].apply(helper.to_MW_MVar)
+        Data_GEN["Q [MVAr]"] = Data_GEN["Q [MVAr]"].apply(helper.to_MW_MVar)
+        Data_GEN["Vnom [kV]"] = Data_GEN["V [kV]"].apply(helper.get_nominal_voltage)
+
+        Data_GEN_copy = Data_GEN
+        c = 0
+        for name in Data_GEN_copy["Name1"]:
+            if "BESS" in name:
+                Data_GEN.at[c, "type"] = "BESS"
+            if "PMGD" in name:
+                Data_GEN.at[c, "type"] = "PMGD"
+            if ("PFV" in name or "PMG" in name) and "PMGD" not in name:
+                Data_GEN.at[c, "type"] = "PFV"
+            if "PE" in name and "PFV" not in name and "Central" not in name:
+                Data_GEN.at[c, "type"] = "PE"
+
+            if (
+                "HP_" in name
+                or "TER_" in name
+                or "HE_" in name
+                or "LomaALta" in name
+                or "La_Mina_RColorado" in name
+            ):
+                Data_GEN.at[c, "type"] = "SG"
+            if "CCSS" in name:
+                Data_GEN.at[c, "type"] = "CCSS"
+            if "STAT" in name:
+                Data_GEN.at[c, "type"] = "STATCOM"
+            if "BAT" in name:
+                Data_GEN.at[c, "type"] = "BATSINC"
+            if "HVDC" in name:
+                Data_GEN.at[c, "type"] = "HVDC"
+
+            c = c + 1
+
+        return Data_GEN
+
+    def clean_and_filter_load_data(sel, Data: pd.DataFrame) -> pd.DataFrame:
+        helper = Helper()
+        Types_selected = ["PQload"]
+        Data_load = Data[Data["Type"].isin(Types_selected)]
+        Data_load.columns = ["Name", "Type", "V [kV]", "P [MW]", "Q [MVAr]"]
+
+        Data_load["V [kV]"] = Data_load["V [kV]"].apply(
+            lambda x: helper.get_voltage_magnitude(x, phases=1)
+        )
+        Data_load["P [MW]"] = Data_load["P [MW]"].apply(helper.to_MW_MVar)
+        Data_load["Q [MVAr]"] = Data_load["Q [MVAr]"].apply(helper.to_MW_MVar)
+        Data_load["Vnom [kV]"] = Data_load["V [kV]"].apply(helper.get_nominal_voltage)
+        Data_load["V [pu]"] = Data_load["V [kV]"] / Data_load["Vnom [kV]"]
+
+        # indexes of 3 by 3
+        Data_load = Data_load.iloc[::3]
+        # The indexes are reset
+        Data_load = Data_load.reset_index(drop=True)
+        # borro el nombre "Load_a del string de su"
+        Data_load["Name"] = Data_load["Name"].str.replace("/Load_a", "", regex=False)
+
+        return Data_load
+
+
 class Helper:
     def __init__(self):
-        None
+        pass
 
-    def Remove_accents(self, input_str):
-        # Normalizar el string a su forma combinada
-        nfkd_form = unicodedata.normalize("NFKD", input_str)
-        # Filtrar y mantener solo los caracteres que no son diacríticos
-        return "".join([c for c in nfkd_form if not unicodedata.combining(c)])
+    def to_MW_MVar(self, valor):
+        final = float(valor) / (10**6)
+        return round(final, 2)
 
-    def Transformation_MW_MVAR(self, cadena):
-        final = float(cadena) / (10**6)
-        final = round(final, 2)
-        return final
+    def get_voltage_magnitude(self, raw_string: str, phases: int = 3) -> float | str:
+        # Extract all numbers in scientific notation (magnitudes and angles interleaved)
+        voltage_angle_values = re.findall(r"[+-]?\d+\.\d+E[+-]?\d+", raw_string)
 
-    def Get_Voltage_Magnitude(self, cadena):
-        numeros = re.findall(r"[+-]?\d+\.\d+E[+-]?\d+", cadena)
-        indices_pares = [i for i in range(len(numeros)) if i % 2 == 0]
-        valores_pares = [numeros[i] for i in indices_pares]
-        lista_V = [round(float(elemento), 2) for elemento in valores_pares]
-        if lista_V[0] == lista_V[1] == lista_V[2]:
-            return lista_V[0]
+        # Keep only the voltage magnitudes (even indices)
+        voltage_magnitudes = [round(float(v), 2) for v in voltage_angle_values[::2]]
+
+        if phases == 1:
+            return voltage_magnitudes[0] if voltage_magnitudes else None
+        elif phases == 3:
+            if (
+                len(voltage_magnitudes) >= 3
+                and voltage_magnitudes[0]
+                == voltage_magnitudes[1]
+                == voltage_magnitudes[2]
+            ):
+                return voltage_magnitudes[0]
+            else:
+                return "unbalanced"
         else:
-            return "desbanceado"
+            raise ValueError("Only 1-phase or 3-phase supported")
 
-    # toma un el string que tiene "V+angulo y me entrega solo el "V y redondeado"
-    def Split_Voltage_Angle(self, s):
-        numeros = re.findall(r"[+-]?\d+\.\d+E[+-]?\d+", s)
-        if numeros:
-            numero_1 = float(numeros[0])  # Convertir a float
-            return round(numero_1, 2)
-
-    @staticmethod
-    def kilovolts_converter(cadena):
-        final = float(cadena) / (10**3)
-        final = 1.732 * final
-        final = round(final, 2)
-        return final
-
-    def Get_Nominal_Voltage(self, n):
+    def get_nominal_voltage(self, n):
         if 90 <= n + 20 <= 130 or 90 <= n - 20 <= 130:
             return 110
         elif 200 <= n + 20 <= 240 or 200 <= n - 20 <= 240:
@@ -112,38 +184,108 @@ class Helper:
         elif 0.1 <= n + 2 <= 4 or 0.1 <= n - 2 <= 4:
             return 0.6
         else:
-            return None  # Si no cae en ninguna categoría
+            return None  # Si no cae en ninguna categorí
 
-    def Zone_data(self, excel, Hoja, type):
-        # excel = "diccionario_Benja/Diccionario_EMTP_DIgSILENT_BVega_v4.xlsx"
-        # excel = "diccionario_Benja/Zonas_DIgSILENT.xlsx"
-        # excel = "Data/Zonas_DIgSILENT_vF.xlsx"
-        data = pd.read_excel(excel, sheet_name=Hoja)
-        if type == "PV":
-            columnas_deseadas = [
-                "Name1",
-                "Name2",
-                "Zona DIgSILENT",
-                "Nombre DIgSILENT",
-            ]  # Reemplaza con los nombres de las columnas que deseas
-        elif type == "WP":
-            columnas_deseadas = ["Name1", "Zona DIgSILENT", "Nombre DIgSILENT"]
-        elif type == "SG":
-            columnas_deseadas = [
-                "Name1",
-                "Name2",
-                "Name3",
-                "Zona DIgSILENT",
-                "Nombre DIgSILENT",
-            ]
-        elif type == "PMGD":
-            columnas_deseadas = ["Name1", "Name2", "Zona DIgSILENT", "Nombre DIgSILENT"]
-        elif type == "CCSS":
-            columnas_deseadas = ["Name1", "Name2", "Zona DIgSILENT", "Nombre DIgSILENT"]
-        elif type == "Cargas":
-            columnas_deseadas = ["Carga EMTP", "Zona DIgSILENT"]
 
-        # Filtra el DataFrame para que contenga solo las columnas deseadas
-        dataframe_filtrado = data[columnas_deseadas]
-        # return dataframe_filtrado.dropna()
-        return dataframe_filtrado
+class ReportHandler:
+    def __init__(self, Data_gen: pd.DataFrame, Data_load: pd.DataFrame):
+        self.Data_gen = Data_gen
+        self.Data_load = Data_load
+        # Suma de potencias
+        self.P_gen_PFV = self.get_MW_sum_by_type("PFV")
+        self.P_gen_PE = self.get_MW_sum_by_type("PE")
+        self.P_gen_PMGD = self.get_MW_sum_by_type("PMGD")
+        self.P_gen_SG = self.get_MW_sum_by_type("SG")
+        self.P_BESS = self.get_MW_sum_by_type("BESS")
+        self.P_Batsinc = self.get_MW_sum_by_type("BATSINC")
+        self.P_CCSS = self.get_MW_sum_by_type("CCSS")
+        self.P_load = round(self.Data_load["P [MW]"].sum(), 1)
+
+        # Numero de cada tecnologia
+        N_PV = self.count_plants_by_type("PFV")
+        N_PE = self.count_plants_by_type("PE")
+        N_PMGD = self.count_plants_by_type("PMGD")
+        N_SG = self.count_plants_by_type("SG")
+        N_BESS = self.count_plants_by_type("BESS")
+        N_Batsinc = self.count_plants_by_type("BATSINC")
+        N_CCSS = self.count_plants_by_type("CCSS")
+
+    def get_MW_sum_by_type(self, plant_type: str) -> float:
+        P_sum = round(
+            self.Data_gen[self.Data_gen["type"] == plant_type]["P [MW]"].sum(), 1
+        )
+        return P_sum
+
+    def count_plants_by_type(self, plant_type: str) -> int:
+        N = int(self.Data_gen["tipo"].str.count(plant_type).sum())
+        return N
+
+    def get_MW_IBR_gen(self):
+        P_IBR_GEN = sum(
+            [self.P_gen_PFV, self.P_gen_PE, self.P_gen_PMGD, self.get_BESS_gen()]
+        )
+        return P_IBR_GEN
+
+    def get_BESS_gen(self):
+        if self.P_BESS > 0:
+            P_BESS_gen = self.P_BESS
+        elif self.P_BESS < 0:
+            P_BESS_gen = 0
+        return P_BESS_gen
+
+    def get_Batsinc(self):
+        if self.P_Batsinc > 0:
+            P_bat = self.P_Batsinc
+        elif self.P_Batsinc < 0:
+            P_bat = 0
+        return P_bat
+
+    def get_total_gen(self):
+        P_total = self.get_MW_IBR_gen() + self.P_gen_SG + self.get_Batsinc()
+
+    def buil_report(self):
+        data = [
+            ("Total IBR PV Generation", self.P_gen_PFV, "MW"),
+            ("Total IBR WF Generation", self.P_gen_PE, "MW"),
+            ("Total IBR Batteries Generation", self.P_BESS, "MW"),
+            ("Total Distributed Generation (PMGD)", self.P_gen_PMGD, "MW"),
+            ("Total IBR Generation", self.get_MW_IBR_gen, "MW"),
+            ("Total Synchronous Generation", self.P_gen_SG, "MW"),
+            ("Total Generation", Total_GEN, "MW"),
+            ("Total Load (Passive)", P_Load, "MW"),
+            ("Total IBR Batteries Consumption", P_BESS, "MW"),
+            ("Total Synchronous Batteries", P_BATSINC, "MW"),
+            ("Total CCSS Consumption", P_CS, "MW"),
+            ("Total Consumption (Load+Batteries)", Total_consumption, "MW"),
+            ("Total HVDC", P_HVDC, "MW"),
+            ("Total Losses", Loss, "MW"),
+            ("Total Reactives CCSS", Q_CS, "MVar"),
+            (None, None, None),
+            (None, None, None),
+            ("IBR PV Generation Participation", p_IBR_PV, "%"),
+            ("IBR WF Generation Participation", p_IBR_WF, "%"),
+            ("IBR Batteries Generation Part.", p_IBR_BESS_GEN, "%"),
+            ("Distributed Generation (PMGD) Part.", p_PMGD, "%"),
+            ("IBR Generation Participation", p_IBR_GEN, "%"),
+            ("Synchronous Generation Participation", p_Gen_SG, "%"),
+            (None, None, None),
+            (None, None, None),
+            ("Number of photovoltaic generators", N_PV, "-"),
+            ("Number of wind generators", N_WP, "-"),
+            ("Number of synchronous generators", N_SG, "-"),
+            ("Number of PMGDs", N_PMGD, "-"),
+            ("Numner of BESS", N_BESS, "-"),
+            ("Number of synchronous batteries", N_BATSINC, "-"),
+            ("Number of synchronous Condenser", N_CS, "-"),
+        ]
+
+        return pd.DataFrame(data, columns=["Item", "Value", "Unit"])
+
+
+if __name__ == "__main__":
+    manager = FileManager()
+    extractor = DataExtractor()
+    html_file = manager.select_file()
+    gen_data = extractor.get_generation_data(html_file)
+    load_data = extractor.get_load_data(html_file)
+    print(load_data)
