@@ -142,6 +142,151 @@ class DataExtractor:
         return Data_load
 
 
+class ReportHandler:
+    def __init__(self, Data_gen: pd.DataFrame, Data_load: pd.DataFrame):
+        self.Data_gen = Data_gen
+        self.Data_load = Data_load
+        # Suma de potencias
+        self.P_gen_PFV = self.get_MW_sum_by_type("PFV")
+        self.P_gen_PE = self.get_MW_sum_by_type("PE")
+        self.P_gen_PMGD = self.get_MW_sum_by_type("PMGD")
+        self.P_gen_SG = self.get_MW_sum_by_type("SG")
+        self.P_BESS = self.get_MW_sum_by_type("BESS")
+        self.P_Batsinc = self.get_MW_sum_by_type("BATSINC")
+        self.P_CCSS = self.get_MW_sum_by_type("CCSS")
+        self.P_HVDC = self.get_MW_sum_by_type("HVDC")
+        self.P_load = round(self.Data_load["P [MW]"].sum(), 1)
+
+        # Numero de cada tecnologia
+        self.N_PV = self.count_plants_by_type("PFV")
+        self.N_PE = self.count_plants_by_type("PE")
+        self.N_PMGD = self.count_plants_by_type("PMGD")
+        self.N_SG = self.count_plants_by_type("SG")
+        self.N_BESS = self.count_plants_by_type("BESS")
+        self.N_Batsinc = self.count_plants_by_type("BATSINC")
+        self.N_CCSS = self.count_plants_by_type("CCSS")
+
+        # Porcentajes
+
+    def get_MW_sum_by_type(self, plant_type: str) -> float:
+        P_sum = round(
+            self.Data_gen[self.Data_gen["type"] == plant_type]["P [MW]"].sum(), 1
+        )
+        return P_sum
+
+    def count_plants_by_type(self, plant_type: str) -> int:
+        N = int(self.Data_gen["type"].str.count(plant_type).sum())
+        return N
+
+    def get_MW_IBR_gen(self):
+        P_IBR_GEN = sum(
+            [self.P_gen_PFV, self.P_gen_PE, self.P_gen_PMGD, self.get_BESS_gen()]
+        )
+        return P_IBR_GEN
+
+    def get_BESS_gen(self):
+        if self.P_BESS > 0:
+            P_BESS_gen = self.P_BESS
+        elif self.P_BESS < 0:
+            P_BESS_gen = 0
+        return P_BESS_gen
+
+    def get_BESS_no_gen(self):
+        if self.P_BESS < 0:
+            P_BESS_gen = self.P_BESS
+        elif self.P_BESS > 0:
+            P_BESS_gen = 0
+        return P_BESS_gen
+
+    def get_Batsinc_gen(self):
+        if self.P_Batsinc > 0:
+            P_bat = self.P_Batsinc
+        elif self.P_Batsinc < 0:
+            P_bat = 0
+        return P_bat
+
+    def get_Batsinc_no_gen(self):
+        if self.P_Batsinc < 0:
+            P_bat = self.P_Batsinc
+        elif self.P_Batsinc > 0:
+            P_bat = 0
+        return P_bat
+
+    def get_total_consumption(self):
+        consumption = self.get_Batsinc_no_gen() + self.get_BESS_no_gen() + self.P_load
+        return consumption
+
+    def get_losses(self):
+        losses = 0
+        return losses
+
+    def get_total_gen(self):
+        P_total = (
+            self.get_MW_IBR_gen()
+            + self.P_gen_SG
+            + self.get_Batsinc_gen()
+            + self.get_Batsinc_gen()
+        )
+        return P_total
+
+    def gen_percent(self, active_power: float):
+        percent = round(100 * active_power / self.get_total_gen(), 1)
+        return percent
+
+    def buil_report(self):
+        data = [
+            ("Total IBR PV Generation", self.P_gen_PFV, "MW"),
+            ("Total IBR WF Generation", self.P_gen_PE, "MW"),
+            ("Total IBR Batteries Generation", self.get_BESS_gen, "MW"),
+            ("Total Distributed Generation (PMGD)", self.P_gen_PMGD, "MW"),
+            ("Total IBR Generation", self.get_MW_IBR_gen(), "MW"),
+            ("Total Synchronous Generation", self.P_gen_SG, "MW"),
+            ("Total Generation", self.get_total_gen(), "MW"),
+            ("Total Load (Passive)", self.P_load, "MW"),
+            ("Total IBR Batteries Consumption", self.get_BESS_no_gen(), "MW"),
+            ("Total Synchronous Batteries", self.get_Batsinc_no_gen(), "MW"),
+            ("Total CCSS Consumption", self.P_CCSS, "MW"),
+            ("Total Consumption (Load+Batteries)", self.get_total_consumption(), "MW"),
+            ("Total HVDC", self.P_HVDC, "MW"),
+            ("Total Losses", self.get_losses(), "MW"),
+            (None, None, None),
+            (None, None, None),
+            ("IBR PV Generation Participation", self.gen_percent(self.P_gen_PFV), "%"),
+            ("IBR WF Generation Participation", self.gen_percent(self.P_gen_PE), "%"),
+            (
+                "IBR Batteries Generation Part.",
+                self.gen_percent(self.get_Batsinc_gen()),
+                "%",
+            ),
+            (
+                "Distributed Generation (PMGD) Part.",
+                self.gen_percent(self.P_gen_PMGD),
+                "%",
+            ),
+            (
+                "IBR Generation Participation",
+                self.gen_percent(self.get_MW_IBR_gen()),
+                "%",
+            ),
+            (
+                "Synchronous Generation Participation",
+                self.gen_percent(self.P_gen_SG),
+                "%",
+            ),
+            (None, None, None),
+            (None, None, None),
+            ("Number of photovoltaic generators", self.N_PV, "-"),
+            ("Number of wind generators", self.N_PE, "-"),
+            ("Number of synchronous generators", self.N_SG, "-"),
+            ("Number of PMGDs", self.N_PMGD, "-"),
+            ("Numner of BESS", self.N_BESS, "-"),
+            ("Number of synchronous batteries", self.N_Batsinc, "-"),
+            ("Number of synchronous Condenser", self.N_CCSS, "-"),
+        ]
+
+        return pd.DataFrame(data, columns=["Item", "Value", "Unit"])
+
+
 class Helper:
     def __init__(self):
         pass
@@ -187,105 +332,14 @@ class Helper:
             return None  # Si no cae en ninguna categorí
 
 
-class ReportHandler:
-    def __init__(self, Data_gen: pd.DataFrame, Data_load: pd.DataFrame):
-        self.Data_gen = Data_gen
-        self.Data_load = Data_load
-        # Suma de potencias
-        self.P_gen_PFV = self.get_MW_sum_by_type("PFV")
-        self.P_gen_PE = self.get_MW_sum_by_type("PE")
-        self.P_gen_PMGD = self.get_MW_sum_by_type("PMGD")
-        self.P_gen_SG = self.get_MW_sum_by_type("SG")
-        self.P_BESS = self.get_MW_sum_by_type("BESS")
-        self.P_Batsinc = self.get_MW_sum_by_type("BATSINC")
-        self.P_CCSS = self.get_MW_sum_by_type("CCSS")
-        self.P_load = round(self.Data_load["P [MW]"].sum(), 1)
-
-        # Numero de cada tecnologia
-        N_PV = self.count_plants_by_type("PFV")
-        N_PE = self.count_plants_by_type("PE")
-        N_PMGD = self.count_plants_by_type("PMGD")
-        N_SG = self.count_plants_by_type("SG")
-        N_BESS = self.count_plants_by_type("BESS")
-        N_Batsinc = self.count_plants_by_type("BATSINC")
-        N_CCSS = self.count_plants_by_type("CCSS")
-
-    def get_MW_sum_by_type(self, plant_type: str) -> float:
-        P_sum = round(
-            self.Data_gen[self.Data_gen["type"] == plant_type]["P [MW]"].sum(), 1
-        )
-        return P_sum
-
-    def count_plants_by_type(self, plant_type: str) -> int:
-        N = int(self.Data_gen["tipo"].str.count(plant_type).sum())
-        return N
-
-    def get_MW_IBR_gen(self):
-        P_IBR_GEN = sum(
-            [self.P_gen_PFV, self.P_gen_PE, self.P_gen_PMGD, self.get_BESS_gen()]
-        )
-        return P_IBR_GEN
-
-    def get_BESS_gen(self):
-        if self.P_BESS > 0:
-            P_BESS_gen = self.P_BESS
-        elif self.P_BESS < 0:
-            P_BESS_gen = 0
-        return P_BESS_gen
-
-    def get_Batsinc(self):
-        if self.P_Batsinc > 0:
-            P_bat = self.P_Batsinc
-        elif self.P_Batsinc < 0:
-            P_bat = 0
-        return P_bat
-
-    def get_total_gen(self):
-        P_total = self.get_MW_IBR_gen() + self.P_gen_SG + self.get_Batsinc()
-
-    def buil_report(self):
-        data = [
-            ("Total IBR PV Generation", self.P_gen_PFV, "MW"),
-            ("Total IBR WF Generation", self.P_gen_PE, "MW"),
-            ("Total IBR Batteries Generation", self.P_BESS, "MW"),
-            ("Total Distributed Generation (PMGD)", self.P_gen_PMGD, "MW"),
-            ("Total IBR Generation", self.get_MW_IBR_gen, "MW"),
-            ("Total Synchronous Generation", self.P_gen_SG, "MW"),
-            ("Total Generation", Total_GEN, "MW"),
-            ("Total Load (Passive)", P_Load, "MW"),
-            ("Total IBR Batteries Consumption", P_BESS, "MW"),
-            ("Total Synchronous Batteries", P_BATSINC, "MW"),
-            ("Total CCSS Consumption", P_CS, "MW"),
-            ("Total Consumption (Load+Batteries)", Total_consumption, "MW"),
-            ("Total HVDC", P_HVDC, "MW"),
-            ("Total Losses", Loss, "MW"),
-            ("Total Reactives CCSS", Q_CS, "MVar"),
-            (None, None, None),
-            (None, None, None),
-            ("IBR PV Generation Participation", p_IBR_PV, "%"),
-            ("IBR WF Generation Participation", p_IBR_WF, "%"),
-            ("IBR Batteries Generation Part.", p_IBR_BESS_GEN, "%"),
-            ("Distributed Generation (PMGD) Part.", p_PMGD, "%"),
-            ("IBR Generation Participation", p_IBR_GEN, "%"),
-            ("Synchronous Generation Participation", p_Gen_SG, "%"),
-            (None, None, None),
-            (None, None, None),
-            ("Number of photovoltaic generators", N_PV, "-"),
-            ("Number of wind generators", N_WP, "-"),
-            ("Number of synchronous generators", N_SG, "-"),
-            ("Number of PMGDs", N_PMGD, "-"),
-            ("Numner of BESS", N_BESS, "-"),
-            ("Number of synchronous batteries", N_BATSINC, "-"),
-            ("Number of synchronous Condenser", N_CS, "-"),
-        ]
-
-        return pd.DataFrame(data, columns=["Item", "Value", "Unit"])
-
-
 if __name__ == "__main__":
     manager = FileManager()
     extractor = DataExtractor()
+
     html_file = manager.select_file()
     gen_data = extractor.get_generation_data(html_file)
     load_data = extractor.get_load_data(html_file)
-    print(load_data)
+
+    report = ReportHandler(gen_data, load_data)
+    df_report = report.buil_report()
+    print(df_report)
