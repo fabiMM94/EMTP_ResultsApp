@@ -8,7 +8,7 @@ import re
 from pathlib import Path
 from tkinter import Tk, filedialog
 
-
+from nicegui import ui
 class FileManager:
     def __init__(self):
         pass
@@ -127,8 +127,8 @@ class DataExtractor:
         Data_load["V [kV]"] = Data_load["V [kV]"].apply(
             lambda x: helper.get_voltage_magnitude(x, phases=1)
         )
-        Data_load["P [MW]"] = Data_load["P [MW]"].apply(helper.to_MW_MVar)
-        Data_load["Q [MVAr]"] = Data_load["Q [MVAr]"].apply(helper.to_MW_MVar)
+        Data_load["P [MW]"] = 3*Data_load["P [MW]"].apply(helper.to_MW_MVar)
+        Data_load["Q [MVAr]"] = 3*Data_load["Q [MVAr]"].apply(helper.to_MW_MVar)
         Data_load["Vnom [kV]"] = Data_load["V [kV]"].apply(helper.get_nominal_voltage)
         Data_load["V [pu]"] = Data_load["V [kV]"] / Data_load["Vnom [kV]"]
 
@@ -156,8 +156,7 @@ class ReportHandler:
         self.P_CCSS = self.get_MW_sum_by_type("CCSS")
         self.P_HVDC = self.get_MW_sum_by_type("HVDC")
         self.P_load = round(self.Data_load["P [MW]"].sum(), 1)
-
-        # Numero de cada tecnologia
+        # Numero de plantas de cada tecnologia
         self.N_PV = self.count_plants_by_type("PFV")
         self.N_PE = self.count_plants_by_type("PE")
         self.N_PMGD = self.count_plants_by_type("PMGD")
@@ -165,8 +164,13 @@ class ReportHandler:
         self.N_BESS = self.count_plants_by_type("BESS")
         self.N_Batsinc = self.count_plants_by_type("BATSINC")
         self.N_CCSS = self.count_plants_by_type("CCSS")
-
-        # Porcentajes
+        # Porcentajes de generacion
+        self.pP_PFV =  self.gen_percent(self.P_gen_PFV)
+        self.pP_PE =  self.gen_percent(self.P_gen_PE)
+        self.pP_BATg=  self.gen_percent(self.get_Batsinc_gen())
+        self.pP_PMGD= self.gen_percent(self.P_gen_PMGD)
+        self.pP_IBR = self.gen_percent(self.get_MW_IBR_gen())
+        self.pP_SG = self.gen_percent(self.P_gen_SG)
 
     def get_MW_sum_by_type(self, plant_type: str) -> float:
         P_sum = round(
@@ -178,49 +182,54 @@ class ReportHandler:
         N = int(self.Data_gen["type"].str.count(plant_type).sum())
         return N
 
-    def get_MW_IBR_gen(self):
+    def get_MW_IBR_gen(self)-> float:
         P_IBR_GEN = sum(
             [self.P_gen_PFV, self.P_gen_PE, self.P_gen_PMGD, self.get_BESS_gen()]
         )
         return P_IBR_GEN
 
-    def get_BESS_gen(self):
+    def get_BESS_gen(self)-> float:
         if self.P_BESS > 0:
             P_BESS_gen = self.P_BESS
         elif self.P_BESS < 0:
             P_BESS_gen = 0
         return P_BESS_gen
 
-    def get_BESS_no_gen(self):
+    def get_BESS_no_gen(self)-> float:
         if self.P_BESS < 0:
             P_BESS_gen = self.P_BESS
         elif self.P_BESS > 0:
             P_BESS_gen = 0
         return P_BESS_gen
 
-    def get_Batsinc_gen(self):
+    def get_Batsinc_gen(self)-> float:
         if self.P_Batsinc > 0:
             P_bat = self.P_Batsinc
         elif self.P_Batsinc < 0:
             P_bat = 0
         return P_bat
 
-    def get_Batsinc_no_gen(self):
+    def get_Batsinc_no_gen(self)-> float:
         if self.P_Batsinc < 0:
             P_bat = self.P_Batsinc
         elif self.P_Batsinc > 0:
             P_bat = 0
         return P_bat
 
-    def get_total_consumption(self):
-        consumption = self.get_Batsinc_no_gen() + self.get_BESS_no_gen() + self.P_load
+    def get_total_consumption(self)-> float:
+        consumption = abs(self.get_Batsinc_no_gen()) +  abs(self.get_BESS_no_gen()) + self.P_load
         return consumption
 
-    def get_losses(self):
-        losses = 0
+    def get_losses_ac(self)-> float:
+        losses = self.get_total_gen()- self.get_total_consumption()- abs(self.P_CCSS)-abs(self.P_HVDC) 
         return losses
-
-    def get_total_gen(self):
+    def get_losses_dc(self)-> float:
+        losses_dc = abs(self.P_HVDC)
+        return losses_dc
+    def get_losses_total(self)-> float:
+        losses_total = self.get_losses_ac() + self.get_losses_dc()   
+        return losses_total
+    def get_total_gen(self)-> float:
         P_total = (
             self.get_MW_IBR_gen()
             + self.P_gen_SG
@@ -229,15 +238,15 @@ class ReportHandler:
         )
         return P_total
 
-    def gen_percent(self, active_power: float):
+    def gen_percent(self, active_power: float)-> float:
         percent = round(100 * active_power / self.get_total_gen(), 1)
         return percent
 
-    def buil_report(self):
+    def buil_report(self) -> pd.DataFrame:
         data = [
             ("Total IBR PV Generation", self.P_gen_PFV, "MW"),
             ("Total IBR WF Generation", self.P_gen_PE, "MW"),
-            ("Total IBR Batteries Generation", self.get_BESS_gen, "MW"),
+            ("Total IBR Batteries Generation", self.get_BESS_gen(), "MW"),
             ("Total Distributed Generation (PMGD)", self.P_gen_PMGD, "MW"),
             ("Total IBR Generation", self.get_MW_IBR_gen(), "MW"),
             ("Total Synchronous Generation", self.P_gen_SG, "MW"),
@@ -248,31 +257,17 @@ class ReportHandler:
             ("Total CCSS Consumption", self.P_CCSS, "MW"),
             ("Total Consumption (Load+Batteries)", self.get_total_consumption(), "MW"),
             ("Total HVDC", self.P_HVDC, "MW"),
-            ("Total Losses", self.get_losses(), "MW"),
+            ("AC Losses", self.get_losses_ac(), "MW"),
+            ("DC Losses", self.get_losses_dc(), "MW"),
+            ("Total Losses", self.get_losses_total(), "MW"),
             (None, None, None),
             (None, None, None),
-            ("IBR PV Generation Participation", self.gen_percent(self.P_gen_PFV), "%"),
-            ("IBR WF Generation Participation", self.gen_percent(self.P_gen_PE), "%"),
-            (
-                "IBR Batteries Generation Part.",
-                self.gen_percent(self.get_Batsinc_gen()),
-                "%",
-            ),
-            (
-                "Distributed Generation (PMGD) Part.",
-                self.gen_percent(self.P_gen_PMGD),
-                "%",
-            ),
-            (
-                "IBR Generation Participation",
-                self.gen_percent(self.get_MW_IBR_gen()),
-                "%",
-            ),
-            (
-                "Synchronous Generation Participation",
-                self.gen_percent(self.P_gen_SG),
-                "%",
-            ),
+            ("IBR PV Generation Participation", self.pP_PFV , "%"),
+            ("IBR WF Generation Participation", self.pP_PE, "%"),
+            ("IBR Batteries Generation Part.", self.pP_BATg,"%"),
+            ("Distributed Generation (PMGD) Part.",self.pP_PMGD,"%"),
+            ("IBR Generation Participation", self.pP_IBR, "%"),
+            ("Synchronous Generation Participation", self.pP_SG,"%"),
             (None, None, None),
             (None, None, None),
             ("Number of photovoltaic generators", self.N_PV, "-"),
@@ -332,6 +327,68 @@ class Helper:
             return None  # Si no cae en ninguna categorí
 
 
+class NiceGuiHandler:
+    def __init__(self, extractor, report_handler_class):
+        self.extractor = extractor
+        self.report_handler_class = report_handler_class
+        self.html_file = None
+        self.df_report = None
+        self.table_container = None
+        self.download_btn = None
+        self.generate_btn = None
+        self.build_ui()
+
+    def build_ui(self):
+        ui.label("Generador de Reportes HTML").classes("text-2xl font-bold mb-4")
+
+        with ui.card().classes("p-4 mb-4"):
+            ui.label("Sube un archivo HTML:")
+            ui.upload(on_upload=self.handle_upload, auto_upload=True).classes("mb-2")
+        
+        # Botón generar reporte, inicialmente deshabilitado
+        self.generate_btn = ui.button(
+            "Generar Reporte",
+            on_click=self.generate_report
+        ).props("disabled").classes("mb-4")
+
+        # Contenedor para la tabla
+        self.table_container = ui.column()
+
+        # Botón de descarga inicial sin contenido
+        self.download_btn = ui.download().classes("mt-2 hidden")
+
+    def handle_upload(self, e):
+        # Guardar archivo subido como BytesIO
+        self.html_file = io.BytesIO(e.content.read())
+        ui.notify("Archivo cargado correctamente ✅")
+        # Habilitar botón de generar reporte
+        self.generate_btn.props(remove="disabled")
+
+    def generate_report(self):
+        if not self.html_file:
+            ui.notify("Primero sube un archivo ⚠️", type="warning")
+            return
+
+        # Extraer datos usando tu DataExtractor
+        gen_data = self.extractor.get_generation_data(self.html_file)
+        load_data = self.extractor.get_load_data(self.html_file)
+
+        # Crear reporte con tu ReportHandler
+        report = self.report_handler_class(gen_data, load_data)
+        self.df_report = report.buil_report()
+
+        # Mostrar DataFrame como tabla
+        self.table_container.clear()
+        ui.label("Reporte generado:").classes("text-lg font-semibold mb-2")
+        ui.table.from_pandas(self.df_report).classes("w-full")
+
+        # Preparar botón de descarga con contenido
+        csv_data = self.df_report.to_csv(index=False).encode("utf-8")
+        self.download_btn.set_content(csv_data, filename="reporte.csv")
+        self.download_btn.classes(remove="hidden")
+        ui.notify("Reporte generado ✅")
+
+"""
 if __name__ == "__main__":
     manager = FileManager()
     extractor = DataExtractor()
@@ -343,3 +400,8 @@ if __name__ == "__main__":
     report = ReportHandler(gen_data, load_data)
     df_report = report.buil_report()
     print(df_report)
+"""    
+if __name__ == "__main__":
+    extractor = DataExtractor()
+    app = NiceGuiHandler(extractor, ReportHandler)
+    ui.run(host="0.0.0.0", port=8080)
