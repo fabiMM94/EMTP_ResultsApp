@@ -8,7 +8,7 @@ import re
 from pathlib import Path
 from tkinter import Tk, filedialog
 
-from nicegui import ui
+
 class FileManager:
     def __init__(self):
         pass
@@ -327,68 +327,8 @@ class Helper:
             return None  # Si no cae en ninguna categorí
 
 
-class NiceGuiHandler:
-    def __init__(self, extractor, report_handler_class):
-        self.extractor = extractor
-        self.report_handler_class = report_handler_class
-        self.html_file = None
-        self.df_report = None
-        self.table_container = None
-        self.download_btn = None
-        self.generate_btn = None
-        self.build_ui()
 
-    def build_ui(self):
-        ui.label("Generador de Reportes HTML").classes("text-2xl font-bold mb-4")
 
-        with ui.card().classes("p-4 mb-4"):
-            ui.label("Sube un archivo HTML:")
-            ui.upload(on_upload=self.handle_upload, auto_upload=True).classes("mb-2")
-        
-        # Botón generar reporte, inicialmente deshabilitado
-        self.generate_btn = ui.button(
-            "Generar Reporte",
-            on_click=self.generate_report
-        ).props("disabled").classes("mb-4")
-
-        # Contenedor para la tabla
-        self.table_container = ui.column()
-
-        # Botón de descarga inicial sin contenido
-        self.download_btn = ui.download().classes("mt-2 hidden")
-
-    def handle_upload(self, e):
-        # Guardar archivo subido como BytesIO
-        self.html_file = io.BytesIO(e.content.read())
-        ui.notify("Archivo cargado correctamente ✅")
-        # Habilitar botón de generar reporte
-        self.generate_btn.props(remove="disabled")
-
-    def generate_report(self):
-        if not self.html_file:
-            ui.notify("Primero sube un archivo ⚠️", type="warning")
-            return
-
-        # Extraer datos usando tu DataExtractor
-        gen_data = self.extractor.get_generation_data(self.html_file)
-        load_data = self.extractor.get_load_data(self.html_file)
-
-        # Crear reporte con tu ReportHandler
-        report = self.report_handler_class(gen_data, load_data)
-        self.df_report = report.buil_report()
-
-        # Mostrar DataFrame como tabla
-        self.table_container.clear()
-        ui.label("Reporte generado:").classes("text-lg font-semibold mb-2")
-        ui.table.from_pandas(self.df_report).classes("w-full")
-
-        # Preparar botón de descarga con contenido
-        csv_data = self.df_report.to_csv(index=False).encode("utf-8")
-        self.download_btn.set_content(csv_data, filename="reporte.csv")
-        self.download_btn.classes(remove="hidden")
-        ui.notify("Reporte generado ✅")
-
-"""
 if __name__ == "__main__":
     manager = FileManager()
     extractor = DataExtractor()
@@ -400,8 +340,3 @@ if __name__ == "__main__":
     report = ReportHandler(gen_data, load_data)
     df_report = report.buil_report()
     print(df_report)
-"""    
-if __name__ == "__main__":
-    extractor = DataExtractor()
-    app = NiceGuiHandler(extractor, ReportHandler)
-    ui.run(host="0.0.0.0", port=8080)
