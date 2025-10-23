@@ -127,8 +127,8 @@ class DataExtractor:
         Data_load["V [kV]"] = Data_load["V [kV]"].apply(
             lambda x: helper.get_voltage_magnitude(x, phases=1)
         )
-        Data_load["P [MW]"] = 3*Data_load["P [MW]"].apply(helper.to_MW_MVar)
-        Data_load["Q [MVAr]"] = 3*Data_load["Q [MVAr]"].apply(helper.to_MW_MVar)
+        Data_load["P [MW]"] = 3 * Data_load["P [MW]"].apply(helper.to_MW_MVar)
+        Data_load["Q [MVAr]"] = 3 * Data_load["Q [MVAr]"].apply(helper.to_MW_MVar)
         Data_load["Vnom [kV]"] = Data_load["V [kV]"].apply(helper.get_nominal_voltage)
         Data_load["V [pu]"] = Data_load["V [kV]"] / Data_load["Vnom [kV]"]
 
@@ -165,10 +165,10 @@ class ReportHandler:
         self.N_Batsinc = self.count_plants_by_type("BATSINC")
         self.N_CCSS = self.count_plants_by_type("CCSS")
         # Porcentajes de generacion
-        self.pP_PFV =  self.gen_percent(self.P_gen_PFV)
-        self.pP_PE =  self.gen_percent(self.P_gen_PE)
-        self.pP_BATg=  self.gen_percent(self.get_Batsinc_gen())
-        self.pP_PMGD= self.gen_percent(self.P_gen_PMGD)
+        self.pP_PFV = self.gen_percent(self.P_gen_PFV)
+        self.pP_PE = self.gen_percent(self.P_gen_PE)
+        self.pP_BATg = self.gen_percent(self.get_Batsinc_gen())
+        self.pP_PMGD = self.gen_percent(self.P_gen_PMGD)
         self.pP_IBR = self.gen_percent(self.get_MW_IBR_gen())
         self.pP_SG = self.gen_percent(self.P_gen_SG)
 
@@ -182,63 +182,73 @@ class ReportHandler:
         N = int(self.Data_gen["type"].str.count(plant_type).sum())
         return N
 
-    def get_MW_IBR_gen(self)-> float:
+    def get_MW_IBR_gen(self) -> float:
         P_IBR_GEN = sum(
             [self.P_gen_PFV, self.P_gen_PE, self.P_gen_PMGD, self.get_BESS_gen()]
         )
         return P_IBR_GEN
 
-    def get_BESS_gen(self)-> float:
+    def get_BESS_gen(self) -> float:
         if self.P_BESS > 0:
             P_BESS_gen = self.P_BESS
-        elif self.P_BESS < 0:
+        elif self.P_BESS <= 0:
             P_BESS_gen = 0
         return P_BESS_gen
 
-    def get_BESS_no_gen(self)-> float:
+    def get_BESS_no_gen(self) -> float:
         if self.P_BESS < 0:
             P_BESS_gen = self.P_BESS
         elif self.P_BESS > 0:
             P_BESS_gen = 0
         return P_BESS_gen
 
-    def get_Batsinc_gen(self)-> float:
+    def get_Batsinc_gen(self) -> float:
         if self.P_Batsinc > 0:
             P_bat = self.P_Batsinc
-        elif self.P_Batsinc < 0:
+        elif self.P_Batsinc <= 0:
             P_bat = 0
         return P_bat
 
-    def get_Batsinc_no_gen(self)-> float:
+    def get_Batsinc_no_gen(self) -> float:
         if self.P_Batsinc < 0:
             P_bat = self.P_Batsinc
-        elif self.P_Batsinc > 0:
+        elif self.P_Batsinc >= 0:
             P_bat = 0
         return P_bat
 
-    def get_total_consumption(self)-> float:
-        consumption = abs(self.get_Batsinc_no_gen()) +  abs(self.get_BESS_no_gen()) + self.P_load
+    def get_total_consumption(self) -> float:
+        consumption = (
+            abs(self.get_Batsinc_no_gen()) + abs(self.get_BESS_no_gen()) + self.P_load
+        )
         return consumption
 
-    def get_losses_ac(self)-> float:
-        losses = self.get_total_gen()- self.get_total_consumption()- abs(self.P_CCSS)-abs(self.P_HVDC) 
+    def get_losses_ac(self) -> float:
+        losses = (
+            self.get_total_gen()
+            - self.get_total_consumption()
+            - abs(self.P_CCSS)
+            - abs(self.P_HVDC)
+        )
         return losses
-    def get_losses_dc(self)-> float:
+
+    def get_losses_dc(self) -> float:
         losses_dc = abs(self.P_HVDC)
         return losses_dc
-    def get_losses_total(self)-> float:
-        losses_total = self.get_losses_ac() + self.get_losses_dc()   
+
+    def get_losses_total(self) -> float:
+        losses_total = self.get_losses_ac() + self.get_losses_dc()
         return losses_total
-    def get_total_gen(self)-> float:
+
+    def get_total_gen(self) -> float:
         P_total = (
             self.get_MW_IBR_gen()
             + self.P_gen_SG
             + self.get_Batsinc_gen()
-            + self.get_Batsinc_gen()
+            + self.get_BESS_gen()
         )
         return P_total
 
-    def gen_percent(self, active_power: float)-> float:
+    def gen_percent(self, active_power: float) -> float:
         percent = round(100 * active_power / self.get_total_gen(), 1)
         return percent
 
@@ -262,12 +272,12 @@ class ReportHandler:
             ("Total Losses", self.get_losses_total(), "MW"),
             (None, None, None),
             (None, None, None),
-            ("IBR PV Generation Participation", self.pP_PFV , "%"),
+            ("IBR PV Generation Participation", self.pP_PFV, "%"),
             ("IBR WF Generation Participation", self.pP_PE, "%"),
-            ("IBR Batteries Generation Part.", self.pP_BATg,"%"),
-            ("Distributed Generation (PMGD) Part.",self.pP_PMGD,"%"),
+            ("IBR Batteries Generation Part.", self.pP_BATg, "%"),
+            ("Distributed Generation (PMGD) Part.", self.pP_PMGD, "%"),
             ("IBR Generation Participation", self.pP_IBR, "%"),
-            ("Synchronous Generation Participation", self.pP_SG,"%"),
+            ("Synchronous Generation Participation", self.pP_SG, "%"),
             (None, None, None),
             (None, None, None),
             ("Number of photovoltaic generators", self.N_PV, "-"),
@@ -325,8 +335,6 @@ class Helper:
             return 0.6
         else:
             return None  # Si no cae en ninguna categorí
-
-
 
 
 if __name__ == "__main__":
